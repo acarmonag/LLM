@@ -57,23 +57,13 @@ class APITester:
             json.dumps(result, indent=2) if success else "Failed to get valid response"
         )
 
-    def test_system_info(self):
-        """Test system information endpoint"""
-        result = self.make_request("system-info")
-        success = isinstance(result, dict) and "cpu_usage" in result
-        self.print_test_result(
-            "System Info",
-            success,
-            f"CPU: {result.get('cpu_usage', 'N/A')}, Memory: {result.get('memory_used', 'N/A')}" if success else "Failed to get system info"
-        )
 
     def test_text_generation(self, prompts: list[str]):
         """Test text generation with multiple prompts"""
         for prompt in prompts:
             data = {
                 "text": prompt,
-                "max_length": 100,
-                "use_gpu": False
+                "max_length": 100
             }
             result = self.make_request("generate", method="POST", data=data)
             success = isinstance(result, dict) and "generated_text" in result
@@ -87,7 +77,6 @@ class APITester:
         """Test embeddings generation"""
         data = {
             "texts": ["Test embedding", "Another test"],
-            "use_gpu": False
         }
         result = self.make_request("embeddings", method="POST", data=data)
         success = isinstance(result, dict) and "embeddings" in result
@@ -103,7 +92,6 @@ class APITester:
         print(f"Testing API at: {self.base_url}\n")
         
         self.test_health_check()
-        self.test_system_info()
         self.test_text_generation([
             "What is Python?",
             "Explain Docker in simple terms",

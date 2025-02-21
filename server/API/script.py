@@ -28,12 +28,15 @@ def print_system_info(info: Dict):
     print(f"CPU Usage: {info['cpu_usage']}")
     print(f"Memory Usage: {info['memory_used']}")
     if isinstance(info['gpu_info'], list):
+        gpu = True
         for gpu in info['gpu_info']:
             print(f"\nGPU {gpu['id']}:")
             print(f"  Name: {gpu['name']}")
             print(f"  Load: {gpu['load']}")
             print(f"  Memory: {gpu['memory_used']}/{gpu['memory_total']}")
             print(f"  Temperature: {gpu['temperature']}")
+            
+    return gpu
 
 def main():
     print(f"\nStarting API tests at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -41,7 +44,7 @@ def main():
     # Test system info endpoint
     print("\n1. Testing system info endpoint...")
     result = make_request("system-info")
-    print_system_info(result)
+    gpu = print_system_info(result)
 
     # Test root endpoint
     print("\n2. Testing root endpoint...")
@@ -53,7 +56,7 @@ def main():
     generate_data = {
         "text": "What is Python?",
         "max_length": 100,
-        "use_gpu": True
+        "use_gpu": gpu if gpu else False  # Using ternary operator for conditional assignment
     }
     result = make_request("generate", method="POST", data=generate_data)
     print("Generated text:", result.get("generated_text", "No text generated"))
@@ -64,7 +67,7 @@ def main():
     print("\n4. Testing embeddings endpoint...")
     embedding_data = {
         "texts": ["Hello world", "How are you?"],
-        "use_gpu": True
+        "use_gpu": gpu if gpu else False  # Using ternary operator for conditional assignment
     }
     result = make_request("embeddings", method="POST", data=embedding_data)
     print("Embeddings received:", bool(result.get("embeddings")))

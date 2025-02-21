@@ -32,11 +32,9 @@ app.add_middleware(
 class QueryInput(BaseModel):
     text: str
     max_length: int = 50
-    use_gpu: bool = True
 
 class EmbeddingInput(BaseModel):
     texts: List[str]
-    use_gpu: bool = True
 
 # Configuration from environment variables
 OLLAMA_HOST = os.getenv('OLLAMA_HOST', 'ollama')
@@ -44,12 +42,10 @@ OLLAMA_PORT = os.getenv('OLLAMA_PORT', '11434')
 OLLAMA_BASE_URL = f"http://{OLLAMA_HOST}:{OLLAMA_PORT}"
 LLM_MODEL = os.getenv('LLM_MODEL', 'mistral')
 EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL', 'nomic-embed-text')
-DEFAULT_GPU = os.getenv('DEFAULT_GPU', 'false').lower() == 'false'
 
 logger.info(f"Using LLM model: {LLM_MODEL}")
 logger.info(f"Using embeddings model: {EMBEDDING_MODEL}")
 logger.info(f"Ollama URL: {OLLAMA_BASE_URL}")
-logger.info(f"GPU enabled by default: {DEFAULT_GPU}")
 
 def get_system_info():
     """Get system information."""
@@ -83,7 +79,6 @@ async def root():
     return {
         "message": "API LLM con Ollama funcionando",
         "llm_model": LLM_MODEL,
-        "gpu_enabled": DEFAULT_GPU,
         "ollama_url": OLLAMA_BASE_URL
     }
 
@@ -98,10 +93,7 @@ async def generate_text(query: QueryInput):
     try:
         payload = {
             "model": LLM_MODEL,
-            "prompt": query.text,
-            "options": {
-                "gpu": query.use_gpu
-            }
+            "prompt": query.text
         }
         
         response = requests.post(
@@ -110,7 +102,6 @@ async def generate_text(query: QueryInput):
         )
         response.raise_for_status()
         
-        # Parse response and get only the generated text
         generated_text = response.json().get('response', '')
         
         system_info = get_system_info()
@@ -130,10 +121,7 @@ async def get_embeddings(input_data: EmbeddingInput):
         for text in input_data.texts:
             payload = {
                 "model": EMBEDDING_MODEL,
-                "prompt": text,
-                "options": {
-                    "gpu": input_data.use_gpu
-                }
+                "prompt": text
             }
             
             response = requests.post(
