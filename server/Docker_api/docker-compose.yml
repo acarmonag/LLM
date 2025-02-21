@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+      - "8002:8002"
+    environment:
+      - OLLAMA_HOST=ollama
+      - OLLAMA_PORT=11434
+      - LLM_MODEL=mistral
+      - EMBEDDING_MODEL=nomic-embed-text
+      - DEFAULT_GPU=false
+      - PYTHONUNBUFFERED=1  # Add this for better logging
+    networks:
+      - ollama-network
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - ollama-network
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:11434"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+networks:
+  ollama-network:
+    driver: bridge
+
+volumes:
+  ollama_data:
