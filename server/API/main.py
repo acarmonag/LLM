@@ -2,17 +2,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
-import subprocess
 import logging
 import json
 import psutil
 import GPUtil
+import requests
 
-# Add near the top of the file
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -33,11 +28,11 @@ app.add_middleware(
 class QueryInput(BaseModel):
     text: str
     max_length: int = 50
-    use_gpu: bool = True
+    use_gpu: Optional[bool] = True
 
 class EmbeddingInput(BaseModel):
     texts: List[str]
-    use_gpu: bool = True
+    use_gpu: Optional[bool] = True
 
 # Configuración de modelos
 LLM_MODEL = "mistral"
@@ -74,43 +69,6 @@ def get_system_info():
         "gpu_info": gpu_info
     }
 
-def run_ollama_command(command: str, use_gpu: bool = DEFAULT_GPU):
-    """Ejecuta un comando de Ollama y devuelve la salida en JSON."""
-    try:
-        # Check if model exists
-        model_name = command.split()[2]  # Get model name from command
-        check_model = subprocess.run(
-            f"ollama list | findstr {model_name}",
-            shell=True, 
-            capture_output=True, 
-            text=True,
-            encoding='utf-8'  # Specify UTF-8 encoding
-        )
-        if check_model.returncode != 0:
-            raise Exception(f"Model {model_name} not found. Please run 'ollama pull {model_name}'")
-        
-        if use_gpu:
-            command += " --gpu"
-        
-        # Use UTF-8 encoding for subprocess
-        startupinfo = subprocess.STARTUPINFO()
-        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        
-        result = subprocess.run(
-            command, 
-            shell=True, 
-            capture_output=True, 
-            text=True,
-            encoding='utf-8',
-            startupinfo=startupinfo
-        )
-        if result.returncode != 0:
-            raise Exception(result.stderr)
-        return json.loads(result.stdout)
-    except Exception as e:
-        logger.error(f"Error ejecutando Ollama: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.get("/")
 async def root():
     return {
@@ -128,26 +86,41 @@ async def system_info():
 async def generate_text(query: QueryInput):
     """Genera texto usando el modelo LLM de Ollama."""
     try:
-        startupinfo = subprocess.STARTUPINFO()
-        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        payload = {
+            "model": LLM_MODEL,
+            "prompt": query.text
+        }
+        if query.use_gpu:
+            payload["options"] = {"gpu": True}
         
-        command = f"ollama run {LLM_MODEL} '{query.text}'"
-        result = subprocess.run(
-            command, 
-            shell=True, 
-            capture_output=True, 
-            text=True,
-            encoding='utf-8',
-            startupinfo=startupinfo
+        response = requests.post(
+            "http://localhost:11434/api/generate",
+            headers={"Content-Type": "application/json"},
+            json=payload
         )
-        if result.returncode != 0:
-            raise Exception(result.stderr)
+        
+        if response.status_code != 200:
+            raise Exception(f"Request failed with status {response.status_code}: {response.text}")
+        
+        generated_text = ""
+        for line in response.iter_lines():
+            if line:
+                try:
+                    response_data = json.loads(line.decode('utf-8'))
+                    if "response" in response_data:
+                        generated_text += response_data["response"]
+                    if response_data.get("done", False):
+                        break
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Could not parse line: {line}")
+                    continue
         
         system_info = get_system_info()
         return {
-            "generated_text": result.stdout.strip(),
+            "generated_text": generated_text.strip(),
             "system_info": system_info
         }
+            
     except Exception as e:
         logger.error(f"Error en generación de texto: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -158,7 +131,6 @@ async def get_embeddings(input_data: EmbeddingInput):
     try:
         embeddings_results = []
         for text in input_data.texts:
-            # Create JSON payload
             payload = {
                 "model": EMBEDDING_MODEL,
                 "prompt": text
@@ -166,26 +138,20 @@ async def get_embeddings(input_data: EmbeddingInput):
             if input_data.use_gpu:
                 payload["options"] = {"gpu": True}
             
-            # Use PowerShell-compatible command
-            json_escaped = json.dumps(payload).replace('"', '\\"')
-            command = f'curl.exe -X POST http://localhost:11434/api/embeddings -H "Content-Type: application/json" -d "{json_escaped}"'
-            
-            result = subprocess.run(
-                command, 
-                shell=True, 
-                capture_output=True, 
-                encoding='utf-8',  # Specify encoding explicitly
-                text=True
+            response = requests.post(
+                "http://localhost:11434/api/embeddings",
+                headers={"Content-Type": "application/json"},
+                json=payload
             )
             
-            if result.returncode != 0:
-                raise Exception(f"Command failed: {result.stderr}")
+            if response.status_code != 200:
+                raise Exception(f"Request failed with status {response.status_code}: {response.text}")
                 
             try:
-                embedding_data = json.loads(result.stdout)
+                embedding_data = response.json()
                 embeddings_results.append(embedding_data)
             except json.JSONDecodeError as e:
-                logger.error(f"Error parsing JSON: {result.stdout}")
+                logger.error(f"Error parsing JSON: {response.text}")
                 raise Exception(f"Invalid JSON response: {e}")
 
         system_info = get_system_info()

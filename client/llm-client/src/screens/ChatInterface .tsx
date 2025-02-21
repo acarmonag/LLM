@@ -28,7 +28,6 @@ const ChatInterface = () => {
   const [input, setInput] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [embeddings, setEmbeddings] = useState<number[][]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = (): void => {
@@ -50,23 +49,32 @@ const ChatInterface = () => {
     setError(null);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/generate`, {
+      const response = await fetch(`${API_BASE_URL}/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: input.trim(), max_length: 100, use_gpu: true }),
+        body: JSON.stringify({
+          text: input.trim(),
+          max_length: 100,
+          use_gpu: true,
+        }),
       });
-      const data = await res.json();
-      
-      if (res.ok) {
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to generate response");
+      }
+
+      const data = await response.json();
+      if (data.generated_text) {
         const assistantMessage: Message = {
           role: "assistant",
           content: data.generated_text,
         };
         setMessages((prev) => [...prev, assistantMessage]);
       } else {
-        throw new Error(data.detail || "Error generating text");
+        throw new Error("No text generated");
       }
-    } catch (err) {
+    } catch (err: any) {
       setError(err.message);
       const errorMessage: Message = {
         role: "assistant",
@@ -78,32 +86,6 @@ const ChatInterface = () => {
     }
   };
 
-  const handleGetEmbeddings = async () => {
-    setIsLoading(true);
-    setError(null);
-    setEmbeddings([]);
-    
-    try {
-      const res = await fetch(`${API_BASE_URL}/embeddings`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ texts: [input], use_gpu: true }),
-      });
-      const data = await res.json();
-      
-      if (res.ok) {
-        setEmbeddings(data.embeddings);
-      } else {
-        throw new Error(data.detail || "Error fetching embeddings");
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // ... existing JSX return code ...
   return (
     <Box
       sx={{
@@ -119,31 +101,61 @@ const ChatInterface = () => {
         sx={{
           flex: 1,
           overflow: "auto",
+          p: 2,
           display: "flex",
           flexDirection: "column",
-          width: "100%",
+          gap: 2,
         }}
       >
-        {/* ... existing messages mapping code ... */}
-        
-        {embeddings.length > 0 && (
-          <Box sx={{ p: 2, maxWidth: "800px", mx: "auto", width: "100%" }}>
-            <Paper sx={{ p: 2 }}>
-              <Typography variant="h6">Embeddings:</Typography>
+        {messages.map((message, index) => (
+          <Box
+            key={index}
+            sx={{
+              display: "flex",
+              gap: 2,
+              alignItems: "flex-start",
+              maxWidth: "800px",
+              mx: "auto",
+              width: "100%",
+            }}
+          >
+            <Avatar
+              sx={{
+                bgcolor: message.role === "assistant" ? "primary.main" : "secondary.main",
+              }}
+            >
+              {message.role === "assistant" ? <SmartToyIcon /> : <PersonIcon />}
+            </Avatar>
+            <Paper
+              sx={{
+                p: 2,
+                flex: 1,
+                bgcolor: "background.paper",
+                borderRadius: 2,
+              }}
+            >
               <Typography
-                component="pre"
                 sx={{
-                  overflowX: "auto",
                   whiteSpace: "pre-wrap",
-                  fontSize: "0.875rem",
+                  wordBreak: "break-word",
                 }}
               >
-                {JSON.stringify(embeddings, null, 2)}
+                {message.content}
               </Typography>
             </Paper>
           </Box>
+        ))}
+        {isLoading && (
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              p: 2,
+            }}
+          >
+            <CircularProgress />
+          </Box>
         )}
-        
         <div ref={messagesEndRef} />
       </Box>
 
@@ -153,107 +165,52 @@ const ChatInterface = () => {
           borderTop: 1,
           borderColor: "divider",
           bgcolor: "background.paper",
-          width: "100%",
+          p: 2,
         }}
       >
         <Box
+          component="form"
+          onSubmit={handleSubmit}
           sx={{
             maxWidth: "800px",
             mx: "auto",
-            p: 2,
-            width: "100%",
+            display: "flex",
+            gap: 1,
           }}
         >
-          <Paper
-            component="form"
-            onSubmit={handleSubmit}
-            elevation={1}
+          <TextField
+            fullWidth
+            multiline
+            maxRows={4}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Escribe tu mensaje..."
+            disabled={isLoading}
+            variant="outlined"
             sx={{
-              p: 1,
-              display: "flex",
-              gap: 1,
-              width: "100%",
-              bgcolor: "background.paper",
-              border: 1,
-              borderColor: "grey.800",
-              "&:hover": {
-                borderColor: "grey.700",
+              "& .MuiOutlinedInput-root": {
+                bgcolor: "background.paper",
               },
             }}
+          />
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={isLoading || !input.trim()}
+            sx={{ minWidth: 100 }}
           >
-            <TextField
-              fullWidth
-              multiline
-              maxRows={4}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Escribe un mensaje..."
-              disabled={isLoading}
-              variant="standard"
-              InputProps={{
-                disableUnderline: true,
-                sx: {
-                  p: 1,
-                  color: "text.primary",
-                  "& ::placeholder": {
-                    color: "text.secondary",
-                    opacity: 1,
-                  },
-                },
-              }}
-            />
-            <Button
-              onClick={handleGetEmbeddings}
-              variant="contained"
-              disabled={isLoading || !input.trim()}
-              sx={{
-                minWidth: "40px",
-                width: "40px",
-                height: "40px",
-                borderRadius: "8px",
-                mr: 1,
-              }}
-            >
-              <SmartToyIcon />
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={isLoading || !input.trim()}
-              sx={{
-                minWidth: "40px",
-                width: "40px",
-                height: "40px",
-                borderRadius: "8px",
-              }}
-            >
-              <SendIcon />
-            </Button>
-          </Paper>
-          {error && (
-            <Typography
-              variant="caption"
-              sx={{
-                display: "block",
-                mt: 1,
-                color: "error.main",
-              }}
-            >
-              {error}
-            </Typography>
-          )}
-          <Typography
-            variant="caption"
-            align="center"
-            sx={{
-              display: "block",
-              mt: 1,
-              color: "text.secondary",
-            }}
-          >
-            El modelo puede producir información incorrecta.
-          </Typography>
+            {isLoading ? <CircularProgress size={24} /> : <SendIcon />}
+          </Button>
         </Box>
+        {error && (
+          <Typography
+            color="error"
+            align="center"
+            sx={{ mt: 1 }}
+          >
+            {error}
+          </Typography>
+        )}
       </Box>
     </Box>
   );

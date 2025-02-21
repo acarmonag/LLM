@@ -39,7 +39,7 @@ ollama pull nomic-embed-text
 
 3. Start server:
 ```bash
-uvicorn main:app --host 0.0.0.0 --port 8002
+python -m uvicorn main:app --host 0.0.0.0 --port 8002
 ```
 
 4. Test API:

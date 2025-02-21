@@ -56,8 +56,9 @@ def main():
     generate_data = {
         "text": "What is Python?",
         "max_length": 100,
-        "use_gpu": gpu if gpu else False  # Using ternary operator for conditional assignment
+        "use_gpu": True
     }
+    
     result = make_request("generate", method="POST", data=generate_data)
     print("Generated text:", result.get("generated_text", "No text generated"))
     if "system_info" in result:
@@ -67,7 +68,7 @@ def main():
     print("\n4. Testing embeddings endpoint...")
     embedding_data = {
         "texts": ["Hello world", "How are you?"],
-        "use_gpu": gpu if gpu else False  # Using ternary operator for conditional assignment
+        "use_gpu": True
     }
     result = make_request("embeddings", method="POST", data=embedding_data)
     print("Embeddings received:", bool(result.get("embeddings")))
