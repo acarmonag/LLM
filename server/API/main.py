@@ -37,7 +37,7 @@ class EmbeddingInput(BaseModel):
 # Configuración de modelos
 LLM_MODEL = "mistral"
 EMBEDDING_MODEL = "nomic-embed-text"
-DEFAULT_GPU = True
+DEFAULT_GPU = False
 
 logger.info(f"Usando modelo LLM: {LLM_MODEL}")
 logger.info(f"Usando modelo de embeddings: {EMBEDDING_MODEL}")
