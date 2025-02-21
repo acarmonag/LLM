@@ -19,11 +19,12 @@ type MessageRole = "assistant" | "user";
 interface Message {
   role: MessageRole;
   content: string;
+  isEmbedding?: boolean;
 }
 
 const ChatInterface = () => {
   const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: "¡Hola! ¿En qué puedo ayudarte hoy?" },
+    { role: "assistant", content: "¡Hola! ¿En qué puedo ayudarte hoy? (Usa /emb para obtener embeddings)" },
   ]);
   const [input, setInput] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -42,37 +43,75 @@ const ChatInterface = () => {
     e.preventDefault();
     if (!input.trim()) return;
 
-    const userMessage: Message = { role: "user", content: input.trim() };
+    const isEmbeddingRequest = input.trim().startsWith('/emb');
+    const actualInput = isEmbeddingRequest ? input.slice(4).trim() : input.trim();
+
+    const userMessage: Message = { 
+      role: "user", 
+      content: input.trim(),
+      isEmbedding: isEmbeddingRequest 
+    };
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: input.trim(),
-          max_length: 100,
-          use_gpu: true,
-        }),
-      });
+      if (isEmbeddingRequest) {
+        if (!actualInput) {
+          throw new Error("Please provide text after /emb");
+        }
+        
+        const response = await fetch(`${API_BASE_URL}/embeddings`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            texts: [actualInput],
+            use_gpu: true,
+          }),
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Failed to generate response");
-      }
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.detail || "Failed to generate embeddings");
+        }
 
-      const data = await response.json();
-      if (data.generated_text) {
+        const data = await response.json();
+        const embeddings = data.embeddings[0];
+        const formattedEmbeddings = JSON.stringify(embeddings, null, 2);
+
         const assistantMessage: Message = {
           role: "assistant",
-          content: data.generated_text,
+          content: `Embeddings for "${actualInput}":\n\`\`\`json\n${formattedEmbeddings}\n\`\`\``,
+          isEmbedding: true,
         };
         setMessages((prev) => [...prev, assistantMessage]);
       } else {
-        throw new Error("No text generated");
+        const response = await fetch(`${API_BASE_URL}/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: actualInput,
+            max_length: 100,
+            use_gpu: true,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.detail || "Failed to generate response");
+        }
+
+        const data = await response.json();
+        if (data.generated_text) {
+          const assistantMessage: Message = {
+            role: "assistant",
+            content: data.generated_text,
+          };
+          setMessages((prev) => [...prev, assistantMessage]);
+        } else {
+          throw new Error("No text generated");
+        }
       }
     } catch (err: any) {
       setError(err.message);
@@ -130,14 +169,16 @@ const ChatInterface = () => {
               sx={{
                 p: 2,
                 flex: 1,
-                bgcolor: "background.paper",
+                bgcolor: message.isEmbedding ? "rgba(0, 0, 0, 0.03)" : "background.paper",
                 borderRadius: 2,
+                fontFamily: message.isEmbedding ? "monospace" : "inherit",
               }}
             >
               <Typography
                 sx={{
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
+                  fontFamily: message.isEmbedding ? "monospace" : "inherit",
                 }}
               >
                 {message.content}
@@ -184,7 +225,7 @@ const ChatInterface = () => {
             maxRows={4}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Escribe tu mensaje..."
+            placeholder="Escribe tu mensaje... (Usa /emb para obtener embeddings)"
             disabled={isLoading}
             variant="outlined"
             sx={{
