@@ -28,15 +28,12 @@ def print_system_info(info: Dict):
     print(f"CPU Usage: {info['cpu_usage']}")
     print(f"Memory Usage: {info['memory_used']}")
     if isinstance(info['gpu_info'], list):
-        gpu = True
         for gpu in info['gpu_info']:
             print(f"\nGPU {gpu['id']}:")
             print(f"  Name: {gpu['name']}")
             print(f"  Load: {gpu['load']}")
             print(f"  Memory: {gpu['memory_used']}/{gpu['memory_total']}")
             print(f"  Temperature: {gpu['temperature']}")
-            
-    return gpu
 
 def main():
     print(f"\nStarting API tests at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
