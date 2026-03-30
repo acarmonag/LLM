@@ -13,6 +13,7 @@ class SupportEmbeddingInput(BaseModel):
     
 class SupportConfig(BaseModel):
     threshold: float = 0.75
-    max_context_length: int = 5
+    top_k: int = 5
+    max_context_length: int = 10
     preprocess_text: bool = True
     min_confidence: str = "media"

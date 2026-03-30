@@ -1,19 +1,6 @@
 version: '3.8'
 
 services:
-  api:
-    build: .
-    ports:
-      - "8002:8002"
-    environment:
-      - OLLAMA_HOST=ollama
-      - OLLAMA_PORT=11434
-      - LLM_MODEL=mistral
-      - EMBEDDING_MODEL=nomic-embed-text
-      - PYTHONUNBUFFERED=1  # Add this for better logging
-    networks:
-      - ollama-network
-
   ollama:
     image: ollama/ollama:latest
     ports:
@@ -21,17 +8,59 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     networks:
-      - ollama-network
+      - llm-network
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:11434"]
-      interval: 10s
+      test: ["CMD", "curl", "-sf", "http://localhost:11434/api/tags"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  api:
+    build:
+      context: ..
+      dockerfile: Docker_api/Dockerfile
+    ports:
+      - "8002:8002"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_URL=http://ollama:11434
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173}
+      - SIMILARITY_THRESHOLD=${SIMILARITY_THRESHOLD:-0.75}
+      - TOP_K=${TOP_K:-5}
+      - MIN_CONFIDENCE=${MIN_CONFIDENCE:-media}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - LLM_MODEL=mistral
+      - EMBEDDING_MODEL=nomic-embed-text
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - api_data:/app/data
+    networks:
+      - llm-network
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8002/health"]
+      interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 20s
+      start_period: 60s
+
+  client:
+    build:
+      context: ../client/llm-client
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    networks:
+      - llm-network
 
 networks:
-  ollama-network:
+  llm-network:
     driver: bridge
 
 volumes:
   ollama_data:
+  api_data:

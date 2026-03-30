@@ -1,5 +1,5 @@
 import { ThemeProvider, createTheme } from "@mui/material";
-import ChatInterface from "./screens/ChatInterface ";
+import ChatInterface from "./screens/ChatInterface";
 
 const darkTheme = createTheme({
   palette: {
